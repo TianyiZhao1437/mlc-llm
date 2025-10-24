@@ -5,6 +5,8 @@
  */
 #include "logit_processor.h"
 
+#include <iostream>
+#include <fstream>
 #include <picojson.h>
 #include <tvm/ffi/function.h>
 #include <tvm/runtime/device_api.h>
@@ -204,10 +206,47 @@ class LogitProcessorImpl : public LogitProcessorObj {
       DeviceAPI::Get(device_)->StreamSync(device_, /*stream=*/nullptr);
     }
     RECORD_EVENT(trace_recorder_, request_ids, "finish softmax");
+
+    // [Pokemon]Dump logits to disk
+    Tensor logits_on_host = CopyLogitsToCPU(logits);
+    const float* __restrict p_logits =
+      static_cast<float*>(__builtin_assume_aligned(logits_on_host->data, 4));
+    std::ofstream zOut("logits.txt", std::ofstream::binary);
+    zOut.write(reinterpret_cast<char*>(p_logits), sizeof(float)* logits->shape[0] * logits->shape[1]);
+    zOut.close();
     return probs.CreateView({num_total_token, vocab_size_}, probs->dtype);
   }
 
  private:
+
+   /*! \brief Copy logits from device to CPU. */
+  Tensor CopyLogitsToCPU(Tensor logits_on_device) {
+    // probs_on_device: (n, v)
+    if (logits_on_device->device.device_type == DLDeviceType::kDLCPU) {
+      return logits_on_device;
+    }
+
+    ICHECK(logits_on_device->device.device_type != DLDeviceType::kDLCPU);
+    if (logits_host_.defined()) {
+      ICHECK_EQ(logits_host_->shape[1], logits_on_device->shape[1]);
+    }
+
+    int64_t init_size = logits_host_.defined() ? logits_host_->shape[0] : 32;
+    int64_t num_tokens = logits_on_device->shape[0];
+    int64_t vocab_size = logits_on_device->shape[1];
+    while (init_size < num_tokens) {
+      init_size *= 2;
+    }
+    if (!logits_host_.defined() || init_size != logits_host_->shape[0]) {
+      logits_host_ =
+          Tensor::Empty({init_size, vocab_size}, logits_on_device->dtype, DLDevice{kDLCPU, 0});
+    }
+    ICHECK_LE(num_tokens, logits_host_->shape[0]);
+    Tensor view = logits_host_.CreateView({num_tokens, vocab_size}, logits_on_device->dtype);
+    view.CopyFrom(logits_on_device);
+    return view;
+  }
+
   void UpdateWithLogitBias(Tensor logits, const Array<GenerationConfig>& generation_cfg,
                            const std::vector<int>* cum_num_token) {
     NVTXScopedRange nvtx_scope("UpdateWithLogitBias");
