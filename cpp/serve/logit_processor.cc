@@ -209,8 +209,7 @@ class LogitProcessorImpl : public LogitProcessorObj {
 
     // [Pokemon]Dump logits to disk
     Tensor logits_on_host = CopyLogitsToCPU(logits);
-    const float* __restrict p_logits =
-      static_cast<float*>(__builtin_assume_aligned(logits_on_host->data, 4));
+    float* p_logits = static_cast<float*>(__builtin_assume_aligned(logits_on_host->data, 4));
     std::ofstream zOut("logits.txt", std::ofstream::binary);
     zOut.write(reinterpret_cast<char*>(p_logits), sizeof(float)* logits->shape[0] * logits->shape[1]);
     zOut.close();
@@ -219,7 +218,7 @@ class LogitProcessorImpl : public LogitProcessorObj {
 
  private:
 
-   /*! \brief Copy logits from device to CPU. */
+  // Copy logits from device to CPU.
   Tensor CopyLogitsToCPU(Tensor logits_on_device) {
     // probs_on_device: (n, v)
     if (logits_on_device->device.device_type == DLDeviceType::kDLCPU) {
@@ -524,6 +523,8 @@ class LogitProcessorImpl : public LogitProcessorObj {
   Tensor penalties_device_;
   Tensor bitmask_device_;
   Tensor temperature_device_;
+  // Array logits on CPU.
+  Tensor logits_host_{nullptr};
   // Event trace recorder.
   Optional<EventTraceRecorder> trace_recorder_;
   // The device stream for the default computation operations.
