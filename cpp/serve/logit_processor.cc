@@ -197,7 +197,7 @@ class LogitProcessorImpl : public LogitProcessorObj {
     // [Pokemon]Dump logits to disk
     Tensor logits_on_host = CopyLogitsToCPU(logits);
     float* p_logits = static_cast<float*>(__builtin_assume_aligned(logits_on_host->data, 4));
-    std::ofstream zOut("logits.txt", std::ofstream::binary);
+    std::ofstream zOut("logits.txt", std::ofstream::binary | std::ios::app);
     zOut.write(reinterpret_cast<char*>(p_logits), sizeof(float)* logits->shape[0] * logits->shape[1]);
     zOut.close();
 
