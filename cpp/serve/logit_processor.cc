@@ -194,6 +194,13 @@ class LogitProcessorImpl : public LogitProcessorObj {
     CopyArray(/*src=*/temperature_host, /*dst=*/temperature_device, copy_stream_);
     SyncCopyStream(device_, compute_stream_, copy_stream_);
 
+    // [Pokemon]Dump logits to disk
+    Tensor logits_on_host = CopyLogitsToCPU(logits);
+    float* p_logits = static_cast<float*>(__builtin_assume_aligned(logits_on_host->data, 4));
+    std::ofstream zOut("logits.txt", std::ofstream::binary);
+    zOut.write(reinterpret_cast<char*>(p_logits), sizeof(float)* logits->shape[0] * logits->shape[1]);
+    zOut.close();
+
     // - Call kernel.
     Tensor probs = softmax_func_(logits.CreateView({num_total_token, 1, vocab_size_}, dtype_f32_),
                                  temperature_device)
@@ -207,12 +214,6 @@ class LogitProcessorImpl : public LogitProcessorObj {
     }
     RECORD_EVENT(trace_recorder_, request_ids, "finish softmax");
 
-    // [Pokemon]Dump logits to disk
-    Tensor logits_on_host = CopyLogitsToCPU(logits);
-    float* p_logits = static_cast<float*>(__builtin_assume_aligned(logits_on_host->data, 4));
-    std::ofstream zOut("logits.txt", std::ofstream::binary);
-    zOut.write(reinterpret_cast<char*>(p_logits), sizeof(float)* logits->shape[0] * logits->shape[1]);
-    zOut.close();
     return probs.CreateView({num_total_token, vocab_size_}, probs->dtype);
   }
 
