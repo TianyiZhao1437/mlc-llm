@@ -7,6 +7,7 @@
 
 #include <iostream>
 #include <fstream>
+#include <filesystem>
 #include <picojson.h>
 #include <tvm/ffi/function.h>
 #include <tvm/runtime/device_api.h>
@@ -195,9 +196,17 @@ class LogitProcessorImpl : public LogitProcessorObj {
     SyncCopyStream(device_, compute_stream_, copy_stream_);
 
     // [Pokemon]Dump logits to disk
+    int i = 0;
+    std::string file_name = "logits" + std::to_string(i) + ".txt";
+    std::filesystem::path file_path = file_name;
+    while (std::filesystem::exists(file_path)) {
+      i += 1;
+      file_name = "logits" + std::to_string(i) + ".txt";
+      file_path = file_name;
+    }
     Tensor logits_on_host = CopyLogitsToCPU(logits);
     float* p_logits = static_cast<float*>(__builtin_assume_aligned(logits_on_host->data, 4));
-    std::ofstream zOut("logits.txt", std::ofstream::binary | std::ofstream::app);
+    std::ofstream zOut(file_path, std::ofstream::binary | std::ofstream::app);
     zOut.write(reinterpret_cast<char*>(p_logits), sizeof(float)* logits->shape[0] * logits->shape[1]);
     zOut.close();
 
