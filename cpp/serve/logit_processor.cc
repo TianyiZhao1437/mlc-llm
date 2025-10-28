@@ -204,7 +204,7 @@ class LogitProcessorImpl : public LogitProcessorObj {
     float* p_logits = static_cast<float*>(__builtin_assume_aligned(logits_on_host->data, 4));
     // get topk=1000 logits
     int K = 1000;
-    priority_queue<float> min_Heap;
+    std::priority_queue<float> min_Heap;
     for (int i = 0; i < vocab_size_; ++i) {
       float cur_logit = p_logits[i];
       if (i < K) {
@@ -224,7 +224,7 @@ class LogitProcessorImpl : public LogitProcessorObj {
       min_Heap.pop();
     }
     std::ofstream zOut(file_path, std::ofstream::binary | std::ofstream::app);
-    zOut.write(reinterpret_cast<char*>(result), sizeof(float)* K);
+    zOut.write(reinterpret_cast<char*>(result.data()), sizeof(float)* K);
     zOut.close();
 
     // - Call kernel.
