@@ -5,6 +5,7 @@
  */
 #include "logit_processor.h"
 
+#include <queue>
 #include <iostream>
 #include <fstream>
 #include <filesystem>
@@ -196,20 +197,34 @@ class LogitProcessorImpl : public LogitProcessorObj {
     SyncCopyStream(device_, compute_stream_, copy_stream_);
 
     // [Pokemon]Dump logits to disk
-    int i = 0;
-    std::string file_name = "logits" + std::to_string(i) + ".txt";
-    std::filesystem::path file_path = file_name;
-    while (std::filesystem::exists(file_path)) {
-      i += 1;
-      file_name = "logits" + std::to_string(i) + ".txt";
-      file_path = file_name;
-    }
+    std::filesystem::path file_path = "logits.txt";
     Tensor logits_on_host = CopyLogitsToCPU(logits);
     ICHECK(logits_on_host.IsContiguous());
     ICHECK(logits_on_host.DataType() == DataType::Float(32));
     float* p_logits = static_cast<float*>(__builtin_assume_aligned(logits_on_host->data, 4));
+    // get topk=1000 logits
+    int K = 1000;
+    priority_queue<float> min_Heap;
+    for (int i = 0; i < vocab_size_; ++i) {
+      float cur_logit = p_logits[i];
+      if (i < K) {
+        min_Heap.push(cur_logit);
+      } else {
+        if (cur_logit <= min_Heap.top()) {
+          continue;
+        } else {
+          min_Heap.pop();
+          min_Heap.push(cur_logit);
+        }
+      }
+    }
+    std::vector<float> result = {};
+    while (!min_Heap.empty()) {
+      result.push_back(min_Heap.top());
+      min_Heap.pop();
+    }
     std::ofstream zOut(file_path, std::ofstream::binary | std::ofstream::app);
-    zOut.write(reinterpret_cast<char*>(p_logits), sizeof(float)* logits->shape[0] * logits->shape[1]);
+    zOut.write(reinterpret_cast<char*>(result), sizeof(float)* K);
     zOut.close();
 
     // - Call kernel.
