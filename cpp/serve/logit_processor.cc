@@ -205,6 +205,8 @@ class LogitProcessorImpl : public LogitProcessorObj {
       file_path = file_name;
     }
     Tensor logits_on_host = CopyLogitsToCPU(logits);
+    ICHECK(logits_on_host.IsContiguous());
+    ICHECK(logits_on_host.DataType() == DataType::Float(32));
     float* p_logits = static_cast<float*>(__builtin_assume_aligned(logits_on_host->data, 4));
     std::ofstream zOut(file_path, std::ofstream::binary | std::ofstream::app);
     zOut.write(reinterpret_cast<char*>(p_logits), sizeof(float)* logits->shape[0] * logits->shape[1]);
@@ -230,7 +232,7 @@ class LogitProcessorImpl : public LogitProcessorObj {
 
   // Copy logits from device to CPU.
   Tensor CopyLogitsToCPU(Tensor logits_on_device) {
-    // probs_on_device: (n, v)
+    // logits_on_device: (n, v)
     if (logits_on_device->device.device_type == DLDeviceType::kDLCPU) {
       return logits_on_device;
     }
